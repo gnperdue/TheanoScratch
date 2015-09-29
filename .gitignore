@@ -1,5 +1,6 @@
-# Ignore Python pickles
+# Ignore Python pickles and binary saves
 *.pkl
+*.save
 
 # code stuff
 .ropeproject
