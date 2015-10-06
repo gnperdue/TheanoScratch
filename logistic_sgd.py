@@ -23,9 +23,10 @@ class LogisticRegression(object):
         """
         input - T.TensorType - symbolic var for the input (one minibatch)
 
-        n_in - int - dimension of data space
+        n_in - int - dimension of data space (e.g. for 28x28 pixel images,
+        it is 784)
 
-        n_out - int - dimension of labels
+        n_out - int - dimension of labels (e.g., for 0,1...9, it is 10)
         """
         # init with weights at 0
         self.W = theano.shared(
@@ -40,6 +41,15 @@ class LogisticRegression(object):
         )
 
         # symbolic exp for computing class-membership probabilities
+        # * W is a matrix where column k represents the separation hyperplane
+        #   for class k (so it is n_in rows by n_out columns)
+        # * x (input) is a matrix where row-j represents the input training
+        #   sample j (each such row-vector has n_in elements)
+        # * b is a vector where element k represents the free parameter of
+        #   hyperplane k
+        # here the dot of (input, W) has n_sample rows by n_classes columns,
+        # and b is a vector of n_classes in length that is added to each row
+        # in the output of the dot of (input, W)
         self.p_y_given_x = T.nnet.softmax(T.dot(input, self.W) + self.b)
 
         # symbolic desc. for class by max probability
@@ -53,12 +63,20 @@ class LogisticRegression(object):
 
     def negative_log_likelihood(self, y):
         """
+        compute the symbolic loss for a given minibatch
+
         y - T.TensorType - vector of labels
         """
         # y.shape[0] is the number of rows in y - i.e., the number of examples
-        # in the minibatch. T.arange is a symbolic vector containing [0, 1, 2,
-        # ..., n-1]. T.Log(self.p_y_given_x) is a matrix of log-probabilities
-        # with one row per example and one column per class. using the
+        # in the minibatch. note that we use `shape[0]` to pick out the
+        # number - y.shape will have a value like (n,), so y.shape[0] is n.
+        #
+        # T.arange is a symbolic vector containing [0, 1, 2, ..., n-1].
+        #
+        # T.Log(self.p_y_given_x) is a matrix of log-probabilities with one
+        # row per example and one column per class.
+        #
+        # using the
         # [T.arange(y.shape[0]), y] notation picks out the vector
         # [logp[0, y[0]], logp[1, y[1]], logp[2, y[2]], ..., logp[n-1, y[n-1]].
         # note that we take the mean of this vector even though formally the
