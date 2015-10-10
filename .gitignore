@@ -1,3 +1,5 @@
+*.pyc
+
 # Ignore Python pickles and binary saves
 *.pkl
 *.save
