@@ -11,8 +11,8 @@ References:
 from __future__ import print_function
 
 import os
-import sys
 import timeit
+import cPickle
 
 import numpy
 
@@ -93,7 +93,8 @@ class MLP(object):
     multi-layer perceptron with _one_ hidden layer
     """
 
-    def __init__(self, rng, input, n_in, n_hidden, n_out):
+    def __init__(self, rng, input, n_in, n_hidden, n_out,
+                 W_hidden=None, b_hidden=None, W_logreg=None, b_logreg=None):
         """
         initialize the params of the mlp
 
@@ -120,6 +121,8 @@ class MLP(object):
             input=input,
             n_in=n_in,
             n_out=n_hidden,
+            W=W_hidden,
+            b=b_hidden,
             activation=T.tanh
         )
 
@@ -128,7 +131,9 @@ class MLP(object):
         self.logRegressionLayer = LogisticRegression(
             input=self.hiddenLayer.output,
             n_in=n_hidden,
-            n_out=n_out
+            n_out=n_out,
+            W=W_logreg,
+            b=b_logreg
         )
 
         # L1 norm - one regularization option is to enforce L1 norm be small
@@ -314,10 +319,66 @@ def test_mlp(learning_rate=0.01, L1_reg=0.00, L2_reg=0.0001, n_epochs=1000,
     print("Optimization complete. Best validation score of %f %% "
           "obtained at iteration %i, with test performance %f %%" %
           (best_validation_loss * 100.0, best_iter + 1, test_score * 100.0))
-    print >> sys.stderr, ('The code for file ' +
-                          os.path.split(__file__)[1] +
-                          ' ran for %.2fm' % ((end_time - start_time) / 60.0))
+    print('The code for file ' +
+          os.path.split(__file__)[1] +
+          ' ran for %.2fm' % ((end_time - start_time) / 60.0))
+
+    # save the best model - can't seem to pickle the whole model here, rather
+    # than debug, let's just save the params and use them to re-create the
+    # model
+    params = classifier.params
+    with open('mlp_best_model.pkl', 'w') as f:
+        cPickle.dump(params, f)
+
+
+def predict():
+    """
+    example of loading and running a model
+    """
+    # test on some examples from the test set
+    dataset = 'mnist.pkl.gz'
+    datasets = load_data(dataset)
+    test_set_x, test_set_y = datasets[2]
+    test_set_x = test_set_x.get_value()
+    pars = cPickle.load(open('mlp_best_model.pkl'))
+
+    # load the saved weights and bias vectors
+    for i, p in enumerate(pars):
+        print("Checking loaded parameter %i type and shape..." % i)
+        print(type(p))
+        print(p.eval().shape)
+
+    # symbolic vars for the data
+    x = T.matrix('x')        # rasterized image data
+    n_hidden = 500
+    rng = numpy.random.RandomState(1234)
+
+    # use our loaded params to init the model
+    classifier = MLP(
+        rng=rng,
+        input=x,
+        n_in=28*28,
+        n_hidden=n_hidden,
+        n_out=10,
+        W_hidden=pars[0],
+        b_hidden=pars[1],
+        W_logreg=pars[2],
+        b_logreg=pars[3]
+    )
+
+    # compile a predictor fn
+    predict_model = theano.function(
+        inputs=[classifier.input],
+        outputs=classifier.logRegressionLayer.y_pred
+    )
+
+    predicted_values = predict_model(test_set_x[:10])
+    print("Predicted values for the first 10:")
+    print(predicted_values)
+    print("Actual values:")
+    print(T.cast(test_set_y, 'int32').eval()[:10])
 
 
 if __name__ == '__main__':
     test_mlp()
+    predict()
