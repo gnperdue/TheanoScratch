@@ -136,7 +136,7 @@ def load_data(dataset):
         print("Downloading data from %s" % origin)
         urllib.urlretrieve(origin, dataset)
 
-    print("...loading data")
+    print("...loading data %s" % dataset)
 
     f = gzip.open(dataset, 'rb')
     # these datasets are in format - tuple(input, target), where the input
@@ -278,9 +278,10 @@ def sgd_optimization_mnist(learning_rate=0.13,
                                      for i in xrange(n_valid_batches)]
                 this_validation_loss = numpy.mean(validation_losses)
 
-                print('epoch %i, minibatch %i/%i, validation err %f %%' %
+                print('epoch %i, minibatch %i/%i, minibatch avg cost %f '
+                      'validation err %f %%' %
                       (epoch, minibatch_index + 1, n_train_batches,
-                       this_validation_loss * 100.0))
+                       minibatch_avg_cost, this_validation_loss * 100.0))
 
                 if this_validation_loss < best_validation_loss:
                     # improve patience if improvement is significant

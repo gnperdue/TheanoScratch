@@ -1,6 +1,20 @@
 #!/usr/bin/env python
 """
-A multilayer perceptron using Theano
+A multilayer perceptron example using Theano.
+
+Usage:
+    python mlp.py [-t/--train]
+                  [-p/--predict]
+                  [-d/--data <path-to-dataset>]
+                  [-n/--nepochs <# of epochs>]
+
+    Default train False
+            predict False
+            dataset: "../Datasets/mnist.pkl.gz"
+            N epochs: 1000
+
+Note:
+    * The prediction requires a stored model.
 
 Math:
     f(x) = G(b^{(2)} + W^{(2)}(s(b^{(1)} + W^{(1)} x)))
@@ -331,12 +345,11 @@ def test_mlp(learning_rate=0.01, L1_reg=0.00, L2_reg=0.0001, n_epochs=1000,
         cPickle.dump(params, f)
 
 
-def predict():
+def predict(dataset):
     """
     example of loading and running a model
     """
     # test on some examples from the test set
-    dataset = 'mnist.pkl.gz'
     datasets = load_data(dataset)
     test_set_x, test_set_y = datasets[2]
     test_set_x = test_set_x.get_value()
@@ -380,5 +393,29 @@ def predict():
 
 
 if __name__ == '__main__':
-    test_mlp()
-    predict()
+
+    from optparse import OptionParser
+    parser = OptionParser(usage=__doc__)
+    parser.add_option('-d', '--data', dest='dataset',
+                      default='../Datasets/mnist.pkl.gz', help='Data set',
+                      metavar='DATASET')
+    parser.add_option('-n', '--nepochs', dest='n_epochs', default=1000,
+                      help='Number of epochs', metavar='N_EPOCHS',
+                      type='int')
+    parser.add_option('-t', '--train', dest='do_train', default=False,
+                      help='Run the training', metavar='DO_TRAIN',
+                      action='store_true')
+    parser.add_option('-p', '--predict', dest='do_predict', default=False,
+                      help='Run a prediction', metavar='DO_PREDICT',
+                      action='store_true')
+    (options, args) = parser.parse_args()
+
+    if not options.do_train and not options.do_predict:
+        print("\nMust specify at least either train or predict:\n\n")
+        print(__doc__)
+
+    if options.do_train:
+        test_mlp(dataset=options.dataset, n_epochs=options.n_epochs)
+
+    if options.do_predict:
+        predict(dataset=options.dataset)
