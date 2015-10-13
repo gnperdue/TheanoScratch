@@ -385,11 +385,11 @@ def predict(dataset):
         outputs=classifier.logRegressionLayer.y_pred
     )
 
-    predicted_values = predict_model(test_set_x[:10])
-    print("Predicted values for the first 10:")
+    predicted_values = predict_model(test_set_x[:20])
+    print("Predicted values for the first 20:")
     print(predicted_values)
     print("Actual values:")
-    print(T.cast(test_set_y, 'int32').eval()[:10])
+    print(T.cast(test_set_y, 'int32').eval()[:20])
 
 
 if __name__ == '__main__':
