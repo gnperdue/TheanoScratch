@@ -19,7 +19,7 @@ class LogisticRegression(object):
     """
     Multi-class Logistic Regression
     """
-    def __init__(self, input, n_in, n_out):
+    def __init__(self, input, n_in, n_out, W=None, b=None):
         """
         input - T.TensorType - symbolic var for the input (one minibatch)
 
@@ -28,17 +28,24 @@ class LogisticRegression(object):
 
         n_out - int - dimension of labels (e.g., for 0,1...9, it is 10)
         """
-        # init with weights at 0
-        self.W = theano.shared(
-            value=numpy.zeros((n_in, n_out), dtype=theano.config.floatX),
-            name='W',
-            borrow=True
-        )
-        self.b = theano.shared(
-            value=numpy.zeros((n_out), dtype=theano.config.floatX),
-            name='b',
-            borrow=True
-        )
+        # init with weights & bias at 0 if we aren't handed them
+        if W is None:
+            W_values = numpy.zeros(
+                (n_in, n_out),
+                dtype=theano.config.floatX
+            )
+            W = theano.shared(value=W_values, name='W', borrow=True)
+
+        self.W = W
+
+        if b is None:
+            b_values = numpy.zeros(
+                (n_out),
+                dtype=theano.config.floatX
+            )
+            b = theano.shared(value=b_values, name='b', borrow=True)
+
+        self.b = b
 
         # symbolic exp for computing class-membership probabilities
         # * W is a matrix where column k represents the separation hyperplane
