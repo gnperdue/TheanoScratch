@@ -4,6 +4,9 @@ This is Theano code for implementing a convolutional layer. The input consists
 of 3 feature maps (an RGB color image) of size 120x160. We use convolutional
 filters with 9x9 receptive fields.
 
+Note that we do no training here - we only build a random convolution layer
+and apply it to an image.
+
 Following:
     http://deeplearning.net/tutorial/lenet.html
 """
@@ -19,9 +22,14 @@ from PIL import Image
 rng = numpy.random.RandomState(23455)
 
 # 4D tensor for input
+# 4D -> will be (minibatch size, number of input feature maps, img h, img w)
+# Here: img_ = img.transpose(2, 0, 1).reshape(1, channel, height, width)
+# So: 1 minibatch, 3 feature maps (RGB), h, w
 input = T.tensor4(name='input')
 
 # shared variable for weights
+# 4D -> (# of feat. maps at m, # of feat maps at m-1, filter h, filter w)
+# here: output 2 feat. maps, RGB in m-1, filter h, filter w
 w_shp = (2, 3, 9, 9)
 w_bound = numpy.sqrt(3 * 9 * 9)
 W = theano.shared(
@@ -54,10 +62,13 @@ b = theano.shared(
 )
 
 # symbolic expression for the convolution of input with filters in w
+# return shape is ([# images, # filters], img h, img w) - 2D, 3D, or 4D
+# here it is - XD?...
 conv_out = conv.conv2d(input, W)
 
 # symbolic expression to add bias and apply activation function - i.e.,
-# produce the neural network output
+# produce the neural network output - note, we `dimshuffle` this so we
+# are adding the bias in the second axis
 output = T.nnet.sigmoid(conv_out + b.dimshuffle('x', 0, 'x', 'x'))
 
 # Some comments on `dimshuffle`:
