@@ -1,5 +1,23 @@
 #!/usr/bin/env python
 """
+A convolutional neural net example using Theano.
+
+Usage:
+    python convolutional_mlp.py
+                  [-t/--train]
+                  [-p/--predict]
+                  [-d/--data <path-to-dataset>]
+                  [-n/--nepochs <# of epochs>]
+                  [-r/--rate <learning rate>]
+                  [-b/--batch <batch size>]
+
+    Default train False
+            predict False
+            dataset: "./skim_data_target0.pkl.gzDatasets/mnist.pkl.gz"
+            N epochs: 1000
+            batch size: 500
+            rate: 0.01
+
 References:
     * http://deeplearning.net/tutorial/lenet.html
     * Y. LeCun, L. Bottou, Y. Bengio and P. Haffner:
@@ -11,6 +29,7 @@ from __future__ import print_function
 import os
 # import sys
 import timeit
+import cPickle
 
 import numpy
 
@@ -23,12 +42,16 @@ from logistic_sgd import LogisticRegression, load_data
 from mlp import HiddenLayer
 
 
+BEST_PICKLEJAR = 'convolutional_mlp_best_model.pkl'
+
+
 class LeNetConvPoolLayer(object):
     """
     Pool layer of a convolutional neural network.
     """
 
-    def __init__(self, rng, input, filter_shape, image_shape, poolsize=(2, 2)):
+    def __init__(self, rng, input, filter_shape, image_shape, poolsize=(2, 2),
+                 W=None, b=None):
         """
         LeNetConvPoolLayer with shared variable internal parameters.
 
@@ -56,26 +79,34 @@ class LeNetConvPoolLayer(object):
         assert image_shape[1] == filter_shape[1]
         self.input = input
 
-        # there are `# input feat. maps * filt h * filt w` inputs to each
-        # hidden unit
-        fan_in = numpy.prod(filter_shape[1:])
-        # each unit in the lower layer gets a gradient from:
-        #  `# output feat maps * filt h * filt w / pooling size`
-        fan_out = (filter_shape[0] * numpy.prod(filter_shape[2:]) /
-                   numpy.prod(poolsize))
-        # init with random weights
-        W_bound = numpy.sqrt(6.0 / (fan_in + fan_out))
-        self.W = theano.shared(
-            numpy.asarray(
-                rng.uniform(low=W_bound, high=W_bound, size=filter_shape),
+        if W is None:
+            # there are `# input feat. maps * filt h * filt w` inputs to each
+            # hidden unit
+            fan_in = numpy.prod(filter_shape[1:])
+            # each unit in the lower layer gets a gradient from:
+            #  `# output feat maps * filt h * filt w / pooling size`
+            fan_out = (filter_shape[0] * numpy.prod(filter_shape[2:]) /
+                       numpy.prod(poolsize))
+            # init with random weights
+            W_bound = numpy.sqrt(6.0 / (fan_in + fan_out))
+            W_values = numpy.asarray(
+                rng.uniform(
+                    low=-W_bound,
+                    high=W_bound,
+                    size=filter_shape
+                ),
                 dtype=theano.config.floatX
-            ),
-            borrow=True
-        )
+            )
+            W = theano.shared(value=W_values, name='W', borrow=True)
 
-        # bias is a 1d tensor with one bias output per feat. map
-        b_values = numpy.zeros((filter_shape[0],), dtype=theano.config.floatX)
-        self.b = theano.shared(value=b_values, borrow=True)
+        if b is None:
+            # bias is a 1d tensor with one bias output per feat. map
+            b_values = numpy.zeros((filter_shape[0],),
+                                   dtype=theano.config.floatX)
+            b = theano.shared(value=b_values, name='b', borrow=True)
+
+        self.W = W
+        self.b = b
 
         # convolve input feature maps with filters
         conv_out = conv.conv2d(
@@ -303,10 +334,137 @@ def evaluate_lenet5(learning_rate=0.1, n_epochs=200, dataset='mnist.pkl.gz',
     print('The code for file ' + os.path.split(__file__)[1] +
           ' ran for %.2fm' % ((end_time - start_time) / 60.0))
 
+    # save the best model - can't seem to pickle the whole model here, rather
+    # than debug, let's just save the params and use them to re-create the
+    # model
+    with open(BEST_PICKLEJAR, 'w') as f:
+        cPickle.dump(params, f)
+
+
+def predict(dataset, nkerns=[20, 50]):
+    """
+    example of loading and running a model
+    """
+    # test on some examples from the test set
+    datasets = load_data(dataset)
+    test_set_x, test_set_y = datasets[2]
+    test_set_x = test_set_x.get_value()
+    pars = cPickle.load(open(BEST_PICKLEJAR))
+
+    # load the saved weights and bias vectors
+    for i, p in enumerate(pars):
+        print("Checking loaded parameter %i type and shape..." % i)
+        print(type(p))
+        print(p.eval().shape)
+
+    # params = layer3.params + layer2.params + layer1.params + layer0.params
+    # pars[0] -> logreg W (layer "3")
+    # pars[1] -> logreg b (layer "3")
+    # pars[2] -> hidden W (layer "2")
+    # pars[3] -> hidden b (layer "2")
+    # pars[4] -> conv pool layer 1 W
+    # pars[5] -> conv pool layer 1 b
+    # pars[6] -> conv pool layer 0 W
+    # pars[7] -> conv pool layer 0 b
+
+    # symbolic vars for the data
+    rng = numpy.random.RandomState(23455)  # don't actually use this...
+    x = T.matrix('x')       # data is rasterized images
+
+    # use this parameter to control the chunk of the data we evaluate
+    # could set it to 1 and scan the predict function (see below) in a loop
+    # instead perhaps
+    samp_size = 20
+
+    layer0_input = x.reshape((samp_size, 1, 28, 28))
+    layer0 = LeNetConvPoolLayer(
+        rng,
+        input=layer0_input,
+        # input=x.reshape((1, 1, 28, 28)),
+        image_shape=(samp_size, 1, 28, 28),
+        filter_shape=(nkerns[0], 1, 5, 5),
+        poolsize=(2, 2),
+        W=pars[6],
+        b=pars[7]
+    )
+    layer1 = LeNetConvPoolLayer(
+        rng,
+        input=layer0.output,
+        image_shape=(samp_size, nkerns[0], 12, 12),
+        filter_shape=(nkerns[1], nkerns[0], 5, 5),
+        poolsize=(2, 2),
+        W=pars[4],
+        b=pars[5]
+    )
+    layer2_input = layer1.output.flatten(2)
+    layer2 = HiddenLayer(
+        rng,
+        input=layer2_input,
+        n_in=nkerns[1] * 4 * 4,
+        n_out=500,
+        activation=T.tanh,
+        W=pars[2],
+        b=pars[3]
+    )
+    layer3 = LogisticRegression(
+        input=layer2.output,
+        n_in=500,
+        n_out=10,
+        W=pars[0],
+        b=pars[1]
+    )
+
+    # compile a predictor fn
+    predict_model = theano.function(
+        inputs=[layer0.input],
+        outputs=layer3.y_pred
+    )
+
+    predicted_values = \
+        predict_model(test_set_x[:samp_size].reshape(samp_size, 1, 28, 28))
+    print("Predicted values for the first %d:" % (samp_size))
+    print(predicted_values)
+    print("Actual values:")
+    print(T.cast(test_set_y, 'int32').eval()[:samp_size])
+
 
 if __name__ == '__main__':
-    evaluate_lenet5()
 
+    from optparse import OptionParser
+    parser = OptionParser(usage=__doc__)
+    parser.add_option('-d', '--data', dest='dataset',
+                      default='../Datasets/mnist.pkl.gz', help='Data set',
+                      metavar='DATASET')
+    parser.add_option('-n', '--nepochs', dest='n_epochs', default=200,
+                      help='Number of epochs', metavar='N_EPOCHS',
+                      type='int')
+    parser.add_option('-r', '--rate', dest='lrate', default=0.01,
+                      help='Learning rate', metavar='LRATE',
+                      type='float')
+    parser.add_option('-b', '--batch', dest='batch_size', default=500,
+                      help='Batch size', metavar='BSIZE',
+                      type='int')
+    parser.add_option('-t', '--train', dest='do_train', default=False,
+                      help='Run the training', metavar='DO_TRAIN',
+                      action='store_true')
+    parser.add_option('-p', '--predict', dest='do_predict', default=False,
+                      help='Run a prediction', metavar='DO_PREDICT',
+                      action='store_true')
+    (options, args) = parser.parse_args()
 
-def experiment(state, channel):
-    evaluate_lenet5(state.learning_rate, dataset=state.dataset)
+    if not options.do_train and not options.do_predict:
+        print("\nMust specify at least either train or predict:\n\n")
+        print(__doc__)
+
+    n_kerns = [20, 50]
+
+    if options.do_train:
+        evaluate_lenet5(learning_rate=options.lrate,
+                        n_epochs=options.n_epochs,
+                        dataset=options.dataset,
+                        batch_size=options.batch_size,
+                        nkerns=n_kerns)
+
+    if options.do_predict:
+        predict(dataset=options.dataset,
+                nkerns=n_kerns)

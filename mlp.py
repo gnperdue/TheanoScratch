@@ -36,6 +36,9 @@ import theano.tensor as T
 from logistic_sgd import LogisticRegression, load_data
 
 
+BEST_PICKLEJAR = 'mlp_best_model.pkl'
+
+
 class HiddenLayer(object):
 
     def __init__(self, rng, input, n_in, n_out,
@@ -55,12 +58,13 @@ class HiddenLayer(object):
         * input - theano.tensor.dmatrix - symbolic tensor of shape
         (n_examples, n_in)
 
-        * n_in - int - dimensionality of the input
+        * n_in - int - (1d) dimensionality (vect length) of the input
 
-        * n_out - int - number of hidden units
+        * n_out - int - number (vector length) of hidden units
 
         * activation - theano.Op or function - non-linearity to be applied to
-        the hidden layer
+        the hidden layer (we may also pass `None` for a linear output, or no
+        non-linearity applied before passing the output along)
         """
         self.input = input
 
@@ -108,7 +112,8 @@ class MLP(object):
     """
 
     def __init__(self, rng, input, n_in, n_hidden, n_out,
-                 W_hidden=None, b_hidden=None, W_logreg=None, b_logreg=None):
+                 W_hidden=None, b_hidden=None,
+                 W_logreg=None, b_logreg=None):
         """
         initialize the params of the mlp
 
@@ -125,6 +130,14 @@ class MLP(object):
 
         n_out - int - number of output units (dimension of the space of the
         labels)
+
+        W_hidden and b_hidden - theano tensors holding trained weights and
+        biases for the hidden layer. if we pass `None`, we are telling the
+        MLP to initialize these values with the random number generator `rng`
+
+        W_logreg and b_logreg - theano tensors holding trained weights and
+        biases for the logreg layer. if we pass `None`, we are telling the
+        MLP to initialize these values with the random number generator `rng`
         """
         # this is a one-hidden-layer MLP, so we will create a HiddenLayer
         # with `tanh` activation connected to the logistic regression layer.
@@ -150,13 +163,17 @@ class MLP(object):
             b=b_logreg
         )
 
-        # L1 norm - one regularization option is to enforce L1 norm be small
+        # L1 norm - one regularization option is to enforce L1 norm be small.
+        # here, we just use the sum of the absolute values of the elements
+        # of the Weights tensors
         self.L1 = (
             abs(self.hiddenLayer.W).sum() +
             abs(self.logRegressionLayer.W).sum()
         )
 
-        # L2 norm - one regularization option is to enforce L2 norm be small
+        # L2 norm - one regularization option is to enforce L2 norm be small.
+        # here, we use the sum of the squares of the elements of the Weights
+        # tensors
         self.L2_sqr = (
             (self.hiddenLayer.W ** 2).sum() +
             (self.logRegressionLayer.W ** 2).sum()
@@ -341,7 +358,7 @@ def test_mlp(learning_rate=0.01, L1_reg=0.00, L2_reg=0.0001, n_epochs=1000,
     # than debug, let's just save the params and use them to re-create the
     # model
     params = classifier.params
-    with open('mlp_best_model.pkl', 'w') as f:
+    with open(BEST_PICKLEJAR, 'w') as f:
         cPickle.dump(params, f)
 
 
@@ -353,7 +370,7 @@ def predict(dataset):
     datasets = load_data(dataset)
     test_set_x, test_set_y = datasets[2]
     test_set_x = test_set_x.get_value()
-    pars = cPickle.load(open('mlp_best_model.pkl'))
+    pars = cPickle.load(open(BEST_PICKLEJAR))
 
     # load the saved weights and bias vectors
     for i, p in enumerate(pars):
