@@ -13,7 +13,7 @@ Usage:
 
     Default train False
             predict False
-            dataset: "./skim_data_target0.pkl.gzDatasets/mnist.pkl.gz"
+            dataset: "../Datasets/mnist.pkl.gz"
             N epochs: 1000
             batch size: 500
             rate: 0.01
