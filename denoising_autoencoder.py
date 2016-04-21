@@ -5,11 +5,21 @@ Following:
 """
 from __future__ import print_function
 
+import os
+import timeit
+
 import numpy as np
 
 import theano
 import theano.tensor as T
 from theano.tensor.shared_randomstreams import RandomStreams
+
+import PIL.Image as Image
+
+from logistic_sgd import load_data
+from utils import tile_raster_images
+
+from six.moves import range
 
 
 class dA(object):
@@ -25,10 +35,6 @@ class dA(object):
         bvis=None
     ):
         """
-        Initialize with the number of visible units (input dimension), the
-        number of hidden units (dimension of the latent/hidden space), and the
-        corruption level.
-
         * numpy_rng : numpy.random.RandomState
         * thean_rng : theano.tensor.shared_randomstreams.RandomStreams - if
         `None` is given, generate one based on a seed from `numpy_rng`
@@ -127,3 +133,74 @@ class dA(object):
         ]
 
         return (cost, updates)
+
+
+def test_dA(learning_rate=0.1, training_epochs=15,
+            dataset='mnist.pkl.gz', batch_size=20, output_folder='dA_plots'):
+    """
+    demo with MNIST
+    """
+    datasets = load_data(dataset)
+    train_set_x, train_set_y = datasets[0]
+
+    n_train_batches = train_set_x.get_value(borrow=True).shape[0] / batch_size
+
+    index = T.lscalar()    # minibatch index
+    x = T.matrix('x')      # rasterized image data
+
+    if not os.path.isdir(output_folder):
+        os.makedirs(output_folder)
+    os.chdir(output_folder)
+
+    # build the model with no corruption
+    rng = np.random.RandomState(123)
+    theano_rng = RandomStreams(rng.randint(2 ** 30))
+
+    da = dA(
+        numpy_rng=rng,
+        theano_rng=theano_rng,
+        input=x,
+        n_visible=28 * 28,
+        n_hidden=500
+    )
+
+    cost, updates = da.get_cost_updates(
+        corruption_level=0.,
+        learning_rate=learning_rate
+    )
+
+    train_da = theano.function(
+        [index],
+        cost,
+        updates=updates,
+        givens={
+            x: train_set_x[index * batch_size: (index + 1) * batch_size]
+        }
+    )
+
+    # training
+    start_time = timeit.default_timer()
+
+    # loop through training epochs
+    for epoch in range(training_epochs):
+        # loop through training set
+        c = []
+        for batch_index in range(n_train_batches):
+            c.append(train_da(batch_index))
+
+        print('Training epoch {} cost {}'.format(epoch, np.mean(c)))
+
+    end_time = timeit.default_timer()
+    training_time = (end_time - start_time)
+    print('The no corruption code for file {} ran for {:0.2f}m'.format(
+        os.path.split(__file__)[1], training_time / 60.0))
+
+    image = Image.fromarray(
+        tile_raster_images(X=da.W.get_value(borrow=True).T,
+                           img_shape=(28, 28), tile_shape=(10, 10),
+                           tile_spacing=(1, 1)))
+    image.save('filters_corruption_0.png')
+
+
+if __name__ == '__main__':
+    test_dA()
